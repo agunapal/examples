@@ -108,6 +108,7 @@ def main():
     use_mps = not args.no_mps and torch.backends.mps.is_available()
 
     torch.manual_seed(args.seed)
+    torch.backends.cuda.matmul.allow_tf32 = True 
 
     if use_cuda:
         device = torch.device("cuda")
@@ -137,7 +138,7 @@ def main():
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
     model = Net().to(device)
-    opt_model = torch.compile(model)
+    opt_model = torch.compile(model, mode="reduce-overhead")
     optimizer = optim.Adadelta(opt_model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
