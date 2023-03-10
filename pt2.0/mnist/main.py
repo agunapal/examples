@@ -1,11 +1,15 @@
 from __future__ import print_function
 import argparse
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
+import torch._dynamo.config as dcfg
+import torch._functorch.config as fcfg
+import torch._inductor.config as icfg
 
 
 class Net(nn.Module):
@@ -109,6 +113,13 @@ def main():
 
     torch.manual_seed(args.seed)
     torch.backends.cuda.matmul.allow_tf32 = True 
+    #dcfg.log_level = logging.DEBUG
+    #dcfg.print_graph_breaks = True
+    #dcfg.output_code = True
+    #fcfg.debug_graphs = True
+    #icfg.debug = True
+    #icfg.trace.enabled = True
+    #torch._dynamo.config.verbose=True
 
     if use_cuda:
         device = torch.device("cuda")
@@ -138,7 +149,8 @@ def main():
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
     model = Net().to(device)
-    opt_model = torch.compile(model, mode="reduce-overhead")
+    print(model)
+    opt_model = torch.compile(model)
     optimizer = optim.Adadelta(opt_model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
