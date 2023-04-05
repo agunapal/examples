@@ -1,5 +1,6 @@
 from __future__ import print_function
 import argparse
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,13 +8,29 @@ import torch.optim as optim
 from torchvision import datasets, transforms, models
 from torch.optim.lr_scheduler import StepLR
 import torch.backends.cudnn as cudnn
+import torch._dynamo.config as dcfg
+import torch._functorch as fcfg
+import torch._inductor.config as icfg
 
 from datasets import load_dataset
 
 torch.set_float32_matmul_precision('high')
 cudnn.benchmark=True
 
-
+##################################################
+#               DEBUG FLAGS
+##################################################
+#TORCH_COMPILE_DEBUG=1
+#dcfg.log_level = logging.DEBUG
+#dcfg.verbose = True
+#dcfg.print_graph_breaks = True
+#dcfg.output_code = True
+#AOT_FX_GRAPHS=1
+#fcfg.log_level = logging.DEBUG
+#fcfg.debug_graphs = True
+#icfg.debug = True
+#icfg.trace.enabled = True
+##################################################
 
 def train(args, model, device, train_loader, optimizer, criterion, epoch):
     model.train()
@@ -79,7 +96,7 @@ def main():
                         help='To enable reduce-overhead mode in torch.compile')
     parser.add_argument('--max-autotune', action='store_true', default=False,
                         help='To enable max-autotune mode in torch.compile')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
+    parser.add_argument('--epochs', type=int, default=1, metavar='N',
                         help='number of epochs to train (default: 14)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 1.0)')
@@ -181,7 +198,7 @@ def main():
         scheduler.step()
 
     if args.save_model:
-        torch.save(opt_model.state_dict(), "mnist_cnn.pt")
+        torch.save(opt_model.state_dict(), "resnet_cats_dogs.pt")
 
 
 if __name__ == '__main__':
