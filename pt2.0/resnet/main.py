@@ -90,9 +90,8 @@ def test(model, device, test_loader, criterion):
     test_loss = 0
     correct = 0
     with torch.no_grad():
-        for data in test_loader:
-            data, target = data["image"], data["labels"]
-            data, target = data.to(device), target.to(device)
+        for batch in test_loader:
+            data, target = batch["image"].to(device), batch["labels"].to(device)
             output = model(data)
             test_loss += criterion(output, target).item()  # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
@@ -121,7 +120,7 @@ def collate_fn(batch):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch ResNet Example')
-    parser.add_argument('--batch-size', type=int, default=32, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
@@ -139,8 +138,8 @@ def main():
                         help='SGD Momentum (default: 0.9)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
                         help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--no-cuda', action='store_true', default=False,
-                        help='disables CUDA training')
+    parser.add_argument('--dl-opt', action='store_true', default=False,
+                        help='Dataloader optimization')
     parser.add_argument('--no-mps', action='store_true', default=False,
                         help='disables macOS GPU training')
     parser.add_argument('--dry-run', action='store_true', default=False,
@@ -156,26 +155,21 @@ def main():
     parser.add_argument('--resnet152', action='store_true', default=False,
                         help='Use ResNet152 model')
     args = parser.parse_args()
-    use_cuda = not args.no_cuda and torch.cuda.is_available()
-    use_mps = not args.no_mps and torch.backends.mps.is_available()
+    use_cuda = torch.cuda.is_available()
 
+    assert use_cuda == True, "This tutorial needs a CUDA device"
+    device = torch.device("cuda")
     torch.manual_seed(args.seed)
 
-    if use_cuda:
-        device = torch.device("cuda")
-    elif use_mps:
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
 
     train_kwargs = {'batch_size': args.batch_size}
     test_kwargs = {'batch_size': args.test_batch_size}
-    if use_cuda:
-        cuda_kwargs = {'num_workers': 1,
+    if args.dl_opt:
+        opt_kwargs = {'num_workers': 4,
                        'pin_memory': True,
                        'shuffle': True}
-        train_kwargs.update(cuda_kwargs)
-        test_kwargs.update(cuda_kwargs)
+        train_kwargs.update(opt_kwargs)
+        test_kwargs.update(opt_kwargs)
 
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
@@ -237,16 +231,25 @@ def main():
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     criterion = nn.CrossEntropyLoss()
     
-    total_training_time = []
+    total_training_time, total_evaluation_time = [], []
     epochs = []
     for epoch in range(1, args.epochs + 1):
         training_time = timed(lambda: train(args, opt_model, device, train_loader, optimizer, criterion, epoch, args.profile))[1]
         print(f"Training Time: {training_time}")
         total_training_time.append(training_time)
         epochs.append(epoch)
-        print(f"Evaluation Time: {timed(lambda: test(opt_model, device, test_loader, criterion))[1]}")
+             
+        evautation_time = timed(lambda: test(opt_model, device, test_loader, criterion))[1]
+        print(f"Evaluation Time: {evautation_time}")
+        total_evaluation_time.append(evautation_time)
         scheduler.step()
+        print("#########################################################")
 
+    
+    print("#########################################################")
+    print(f"Total training time in seconds: {sum(total_training_time):.2f}")
+    print(f"Total evaluation time in seconds: {sum(total_evaluation_time):.2f}")
+    print("#########################################################")
     if args.save_model:
         torch.save(opt_model.state_dict(), "resnet_cats_dogs.pt")
     
